@@ -3,33 +3,36 @@
 package com.foursquare.common.async
 
 import com.foursquare.common.async.Async.{async, await}
-import org.junit.{Assert => T, Test}
-import com.twitter.util.{Await, Duration, Future}
+import org.junit.{Test, Assert => T}
+import com.twitter.util.{Await, Duration, Future, FuturePool}
 import java.util.concurrent.TimeUnit
-import scala.concurrent.ExecutionContext.Implicits.global
 
 class TwitterFutureSystemTest {
   @Test
-  def testBasicAsync() {
+  def testSynchronousAsync() {
     val f1: Future[Int] = Future.value(5)
     val f2: Future[Int] = Future.value(10)
     val f3 = async {
       val v1 = await(f1)
       val v2 = await(f2)
+      Thread.sleep(10)
       v1 + v2
     }
+    T.assertTrue(f3.map(_ => ()).isDone)
     T.assertEquals(Await.result(f3, Duration(2, TimeUnit.SECONDS)), 15)
   }
 
   @Test
-  def testExplicitAsync() {
+  def testAsynchronousAsync() {
     val f1: Future[Int] = Future.value(5)
     val f2: Future[Int] = Future.value(10)
-    val f3 = async(global) {
+    val f3 = async(FuturePool.unboundedPool) {
       val v1 = await(f1)
       val v2 = await(f2)
+      Thread.sleep(10)
       v1 + v2
     }
+    T.assertFalse(f3.map(_ => ()).isDone)
     T.assertEquals(Await.result(f3, Duration(2, TimeUnit.SECONDS)), 15)
   }
 

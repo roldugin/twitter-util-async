@@ -29,8 +29,9 @@
 
 package com.foursquare.common.async
 
+import com.twitter.util.{Future, FuturePool, Promise, Try}
+
 import scala.async.internal.FutureSystem
-import scala.concurrent.ExecutionContext
 import scala.reflect.macros.whitebox.Context
 
 /**
@@ -38,21 +39,21 @@ import scala.reflect.macros.whitebox.Context
  * For using scala-async with twitter-util/Finagle.
  */
 object TwitterFutureSystem extends FutureSystem {
-  type Prom[A] = com.twitter.util.Promise[A]
-  type Fut[A] = com.twitter.util.Future[A]
-  type ExecContext = ExecutionContext
-  type Tryy[A] = com.twitter.util.Try[A]
+  type Prom[A] = Promise[A]
+  type Fut[A] = Future[A]
+  type ExecContext = FuturePool
+  type Tryy[A] = Try[A]
 
   def mkOps(c0: Context): Ops { val c: c0.type } = new Ops {
     val c: c0.type = c0
     import c.universe._
 
-    def promType[A: WeakTypeTag]: Type = weakTypeOf[com.twitter.util.Promise[A]]
+    def promType[A: WeakTypeTag]: Type = weakTypeOf[Promise[A]]
     def tryType[A: WeakTypeTag]: Type = weakTypeOf[com.twitter.util.Try[A]]
-    def execContextType: Type = weakTypeOf[ExecutionContext]
+    def execContextType: Type = weakTypeOf[FuturePool]
 
     def createProm[A: WeakTypeTag]: Expr[Prom[A]] = reify {
-      com.twitter.util.Promise[A]()
+      Promise[A]()
     }
 
     def promiseToFuture[A: WeakTypeTag](prom: Expr[Prom[A]]): Expr[Fut[A]] = reify {
@@ -60,18 +61,7 @@ object TwitterFutureSystem extends FutureSystem {
     }
 
     def future[A: WeakTypeTag](a: Expr[A])(execContext: Expr[ExecContext]): Expr[Fut[A]] = reify {
-      val promise = com.twitter.util.Promise[A]()
-      execContext.splice.prepare().execute(new Runnable {
-        def run() {
-          try {
-            promise.setValue(a.splice)
-          } catch {
-            case ex: Exception =>
-              promise.setException(ex)
-          }
-        }
-      })
-      promise
+      execContext.splice.apply(a.splice)
     }
 
     def onComplete[A, U](
@@ -79,14 +69,7 @@ object TwitterFutureSystem extends FutureSystem {
       fun: Expr[com.twitter.util.Try[A] => U],
       execContext: Expr[ExecContext]
     ): Expr[Unit] = reify {
-      val responder = fun.splice
-      future.splice.respond(tryValue => {
-        execContext.splice.prepare().execute(new Runnable {
-          def run() {
-            responder(tryValue)
-          }
-        })
-      })
+      future.splice.respond { tryy => val _ = fun.splice(tryy) }
       ()
     }
 

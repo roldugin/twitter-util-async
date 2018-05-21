@@ -29,6 +29,8 @@
 
 package com.foursquare.common.async
 
+import com.twitter.util.FuturePool
+
 import scala.async.internal.AsyncBase
 import scala.language.experimental.macros
 import scala.reflect.macros.whitebox.Context
@@ -37,15 +39,15 @@ object TwitterAsyncImpl extends AsyncBase {
   type FS = TwitterFutureSystem.type
   val futureSystem: FS = TwitterFutureSystem
 
-  override def asyncImpl[T: c.WeakTypeTag](c: Context)
-                                          (body: c.Expr[T])
-                                          (execContext: c.Expr[futureSystem.ExecContext]): c.Expr[futureSystem.Fut[T]] = {
-    super.asyncImpl[T](c)(body)(execContext)
+  def asyncImplSynchronous[T: c.WeakTypeTag](c: Context)
+                                            (body: c.Expr[T]): c.Expr[futureSystem.Fut[T]] = {
+    super.asyncImpl[T](c)(body)(c.universe.reify(FuturePool.immediatePool))
   }
 
-  def asyncImplExplicit[T: c.WeakTypeTag](c: Context)
-                                         (execContext: c.Expr[futureSystem.ExecContext])
-                                         (body: c.Expr[T]): c.Expr[futureSystem.Fut[T]] = {
-    super.asyncImpl[T](c)(body)(execContext)
+  def asyncImplWithFuturePool[T: c.WeakTypeTag](c: Context)
+                                               (futurePool: c.Expr[futureSystem.ExecContext])
+                                               (body: c.Expr[T]): c.Expr[futureSystem.Fut[T]] = {
+    super.asyncImpl[T](c)(body)(futurePool)
   }
+
 }

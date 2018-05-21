@@ -2,7 +2,7 @@ organization := "com.foursquare"
 
 name := "twitter-util-async"
 
-version := "1.3.0"
+version := "2.0.0"
 
 scalaVersion := "2.12.6"
 
